@@ -4,7 +4,7 @@ from src.parser import parse_alert
 from src.notifier import send_telegram_alert
 from src.trade_filter import passes_filters
 from src.data import get_recent_candles
-
+from src.trade_simulator import simulate_trade
 def create_app():
     app = Flask(__name__)
     @app.route("/webhook", methods=["POST"])
@@ -24,6 +24,10 @@ def create_app():
 
             if not passes_filters(trade_info, candles):
                  return jsonify({"status": "rejected", "message": "Trade filtered out"}), 200
+            if passes_filters(trade_info, candles):
+                simulate_trade(trade_info)
+            else:
+                print("🚫 Trade rejected by filters.")
             log_trade(trade_info)
             send_telegram_alert(trade_info)
             print("Received alert: {data}")
