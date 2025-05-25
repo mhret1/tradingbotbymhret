@@ -1,5 +1,7 @@
 import pandas as pd
 from datetime import datetime
+from src.notifier import send_telegram_alert
+
 TRADE_LOG_PATH = "logs/trade_log.csv"
 
 def log_trade(trade):
@@ -32,4 +34,5 @@ def simulate_trade(trade: dict):
     df.to_csv(TRADE_LOG_PATH, mode='a', header=not pd.io.common.file_exists(TRADE_LOG_PATH), index=False)
 
     print(f"📄 Trade logged: {record}")
+    send_telegram_alert(trade)
     return record

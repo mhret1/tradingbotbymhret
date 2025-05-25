@@ -3,8 +3,9 @@ import ta
 from src.sweep_detector import detect_liquidity_sweep
 from src.fvg_detector import detect_fvg
 from src.bos_detector import detect_bos_flexible
+from src.bias_detector import detect_bias
 
-def passes_filters(trade: dict, candles: pd.DataFrame) -> bool:
+def passes_filters(trade: dict, candles: pd.DataFrame, candles_1h: pd.DataFrame) -> bool:
     """
     Applies all smart money filters:
     ✅ RSI + Liquidity Sweep + FVG + BoS
@@ -14,6 +15,19 @@ def passes_filters(trade: dict, candles: pd.DataFrame) -> bool:
 
     # --- Copy for safety
     candles = candles.copy()
+
+    # ✅ Multi-timeframe bias filter
+    bias = detect_bias(candles_1h)
+    print(f"📊 HTF Bias (1H): {bias.upper()}")
+    if bias == "neutral":
+        print("❌ Rejected: Bias is neutral — waiting for confirmation")
+        return False
+    
+    if trade["direction"] != bias:
+        print(f"❌ Rejected: Trade direction is {trade['direction']} but bias is {bias}")
+        return False
+    print("✅ Bias aligns with trade direction")
+
 
     # ✅ 1. RSI Filter
     candles["rsi"] = ta.momentum.RSIIndicator(close=candles["close"]).rsi()
@@ -51,5 +65,6 @@ def passes_filters(trade: dict, candles: pd.DataFrame) -> bool:
         print("❌ Rejected: No Break of Structure")
         return False
 
+    
     print("✅ Trade PASSES all filters")
     return True

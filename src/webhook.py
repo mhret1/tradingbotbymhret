@@ -18,13 +18,14 @@ def create_app():
 
             if not trade_info:
                 return jsonify({"status": "error", "message": "Missing or invalid fields in alert"}), 422
-            candles = get_recent_candles(trade_info["symbol"], "m1")
-            if not passes_filters(trade_info, candles):
+            candles_ltf = get_recent_candles(trade_info["symbol"], "m1")
+            candles_htf = get_recent_candles(trade_info["symbol"], "1h")
+            if not passes_filters(trade_info, candles_ltf, candles_htf):
                 return jsonify({"status": "rejected", "message": "Trade filtered out"}), 200
 
-            if not passes_filters(trade_info, candles):
+            if not passes_filters(trade_info, candles_ltf, candles_htf):
                  return jsonify({"status": "rejected", "message": "Trade filtered out"}), 200
-            if passes_filters(trade_info, candles):
+            if passes_filters(trade_info, candles_ltf, candles_htf):
                 simulate_trade(trade_info)
             else:
                 print("🚫 Trade rejected by filters.")
