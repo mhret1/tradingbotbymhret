@@ -1,53 +1,89 @@
-import pandas as pd
-from datetime import datetime
+import sys
 import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Load historical candle data
-df = pd.read_csv("data/backtest_candles.csv")
+import pandas as pd
 
-# Backtest configuration
-LOOKAHEAD_CANDLES = 5
+from datetime import datetime
+from src.trade_filter import passes_filters
+from src.performance_tracker import log_trade_result
+
+# Clean start
+LOG_PATH = "logs/trade_log.csv"
+if os.path.exists(LOG_PATH):
+    os.remove(LOG_PATH)
+
+# Load candle data
+df_m1 = pd.read_csv("data/xauusd_m1.csv")
+df_m1["timestamp"] = pd.to_datetime(df_m1["Local time"])
+df_m1 = df_m1.rename(columns=lambda c: c.strip().lower())
+
+df_1h = pd.read_csv("data/xauusd_1h.csv")
+df_1h["timestamp"] = pd.to_datetime(df_1h["Local time"])
+df_1h = df_1h.rename(columns=lambda c: c.strip().lower())
+
+LOOKAHEAD = 60
 RR = 2.0
+SL_BUFFER = 2.0
 results = []
 
-# Backtest loop
-for i in range(20, len(df) - LOOKAHEAD_CANDLES):
-    candles = df.iloc[:i].copy()
+for i in range(50, len(df_m1) - LOOKAHEAD):
+    candles = df_m1.iloc[:i].copy()
+    last_candle = df_m1.iloc[i]
+    candles_1h_trimmed = df_1h[df_1h["timestamp"] <= last_candle["timestamp"]].tail(100).copy()
+    if len(candles_1h_trimmed) < 20:
+        continue
 
     trade = {
         "symbol": "XAUUSD",
-        "direction": "buy",  # TODO: use real bias detector
-        "entry": df.iloc[i]["close"],
-        "sl": df.iloc[i - 1]["low"],
-        "tp": df.iloc[i]["close"] + RR * (df.iloc[i]["close"] - df.iloc[i - 1]["low"]),
-        "rr": RR,
-        "timestamp": df.iloc[i]["timestamp"]
+        "timestamp": last_candle["timestamp"],
+        "entry": last_candle["close"],
+        "direction": "buy" if last_candle["close"] > last_candle["open"] else "sell",
+        "rr": RR
     }
 
-    # ✅ For now, we assume all setups are valid. Replace this with your real filter:
-    # if passes_filters(trade, candles): 
-    if True:
-        future = df.iloc[i + 1 : i + 1 + LOOKAHEAD_CANDLES]
-        result = "open"
+    if passes_filters(trade, candles, candles_1h_trimmed):
+        entry = trade["entry"]
+        direction = trade["direction"]
+        sl = entry - SL_BUFFER if direction == "buy" else entry + SL_BUFFER
+        tp = entry + RR * SL_BUFFER if direction == "buy" else entry - RR * SL_BUFFER
+
+        result = "timeout"
+        pnl = 0.0
+        future = df_m1.iloc[i+1:i+1+LOOKAHEAD]
 
         for _, row in future.iterrows():
-            if row["low"] <= trade["sl"]:
-                result = "loss"
-                break
-            if row["high"] >= trade["tp"]:
-                result = "win"
-                break
+            if direction == "buy":
+                if row["low"] <= sl:
+                    result = "loss"
+                    pnl = -SL_BUFFER
+                    break
+                if row["high"] >= tp:
+                    result = "win"
+                    pnl = RR * SL_BUFFER
+                    break
+            else:
+                if row["high"] >= sl:
+                    result = "loss"
+                    pnl = -SL_BUFFER
+                    break
+                if row["low"] <= tp:
+                    result = "win"
+                    pnl = RR * SL_BUFFER
+                    break
 
-        pnl = RR * 100 if result == "win" else -100
-        results.append({
-            **trade,
+        log_trade_result({
+            "symbol": trade["symbol"],
+            "timestamp": trade["timestamp"],
+            "direction": direction,
+            "entry": entry,
+            "sl": sl,
+            "tp": tp,
+            "rr": RR,
             "result": result,
             "pnl": pnl
-        })
+        }, result, pnl)
 
-# Save results
-os.makedirs("logs", exist_ok=True)
-results_path = "logs/backtest_results.csv"
-pd.DataFrame(results).to_csv(results_path, index=False)
+        results.append(result)
 
-print(f"✅ Backtest finished. {len(results)} trades saved to {results_path}")
+print(f"✅ Backtest complete — Trades: {len(results)}")

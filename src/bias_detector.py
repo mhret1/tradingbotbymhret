@@ -2,6 +2,8 @@ import pandas as pd
 
 def detect_bias(candles: pd.DataFrame, lookback: int=5)-> str:
     closes = candles["close"].tail(lookback + 1).tolist()
+    if len(candles) < 20:
+        return "neutral" 
     
     current_close = closes[-1]
     previous_closes = closes[:-1]

@@ -63,4 +63,3 @@ def analyze_performance():
     )
 
     print(summary)
-    send_telegram_message(summary)

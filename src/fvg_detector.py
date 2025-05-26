@@ -7,8 +7,8 @@ def detect_fvg(candles: pd.DataFrame):
         curr_low = candles.iloc[i]["low"]
         if curr_low > prev_high:
             fvg_zones.append({
-                "start": candles.iloc[i-2]["time"],
-                "end": candles.iloc[i]["time"],
+                "start": candles.iloc[i-2]["timestamp"],
+                "end": candles.iloc[i]["timestamp"],
                 "zone_top": candles.iloc[i]["low"],
                 "zone_bottom": candles.iloc[i-2]["high"]
             })
